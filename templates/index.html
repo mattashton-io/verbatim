@@ -60,10 +60,20 @@
             <section id="result-section" class="hidden space-y-4">
                 <div class="flex justify-between items-center">
                     <h2 class="text-2xl font-semibold">Formatted Transcript</h2>
-                    <button id="download-btn" class="px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl transition flex items-center space-x-2">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                        <span>Download</span>
-                    </button>
+                    <div class="flex space-x-2">
+                        <button onclick="downloadTranscript('txt')"
+                            class="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-xl transition text-sm font-medium">TXT</button>
+                        <button onclick="downloadTranscript('md')"
+                            class="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-xl transition text-sm font-medium">MD</button>
+                        <button onclick="downloadTranscript('docx')"
+                            class="pl-3 pr-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl transition text-sm font-medium flex items-center space-x-1">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                            </svg>
+                            <span>DOCX</span>
+                        </button>
+                    </div>
                 </div>
                 <div id="transcript-output" class="output-box glass rounded-3xl p-8 prose prose-invert max-w-none whitespace-pre-wrap leading-relaxed">
                     <!-- Results go here -->
@@ -87,6 +97,7 @@
         const body = document.body;
         const moonIcon = document.getElementById('moon-icon');
         const sunIcon = document.getElementById('sun-icon');
+            let currentJobId = null;
 
         // File Selection Label Update
         fileInput.addEventListener('change', (e) => {
@@ -147,6 +158,7 @@
                         statusText.textContent = 'Refining text with Gemini 3 Flash...';
                     } else if (data.status === 'completed') {
                         clearInterval(interval);
+                        currentJobId = jobId;
                         showResult(data.result);
                     } else if (data.status === 'failed') {
                         clearInterval(interval);
@@ -173,15 +185,10 @@
             statusText.textContent = 'Initializing pipeline...';
         }
 
-        downloadBtn.addEventListener('click', () => {
-            const blob = new Blob([transcriptOutput.textContent], { type: 'text/plain' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'transcript.txt';
-            a.click();
-            window.URL.revokeObjectURL(url);
-        });
+            function downloadTranscript(fmt) {
+                if (!currentJobId) return;
+                window.location.href = `/download/${currentJobId}/${fmt}`;
+            }
     </script>
 </body>
 </html>

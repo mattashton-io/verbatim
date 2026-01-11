@@ -2,11 +2,14 @@ import os
 import uuid
 import threading
 import time
-from flask import Flask, request, render_template, jsonify, send_from_directory
+import io
+import re
+from flask import Flask, request, render_template, jsonify, send_from_directory, send_file
 from google.cloud import storage
 from google.cloud import secretmanager
 from transcription_service_v1 import transcribe_gcs_file, refine_text_with_gemini
 from dotenv import load_dotenv
+from docx import Document
 
 # Load environment variables from .env if it exists
 load_dotenv()
@@ -131,6 +134,65 @@ def status(job_id):
     if not job:
         return jsonify({"error": "Job not found"}), 404
     return jsonify(job)
+
+def create_docx(text):
+    doc = Document()
+    doc.add_heading('Transcript', 0)
+    
+    # Split by <br> tags (handling reasonable variations)
+    paragraphs = re.split(r'<br\s*/?>', text)
+    
+    for para in paragraphs:
+        if para.strip():
+            doc.add_paragraph(para.strip())
+            
+    bio = io.BytesIO()
+    doc.save(bio)
+    bio.seek(0)
+    return bio
+
+@app.route('/download/<job_id>/<fmt>')
+def download_transcript(job_id, fmt):
+    job = jobs.get(job_id)
+    if not job or job.get('status') != 'completed':
+        return jsonify({"error": "Job not completed or found"}), 404
+    
+    refined_text = job.get('result', '')
+    
+    if fmt == 'txt':
+        # Simple text, replace <br> with newlines
+        text_content = refined_text.replace("<br>", "\n").replace("<br/>", "\n")
+        bio = io.BytesIO(text_content.encode('utf-8'))
+        return send_file(
+            bio,
+            as_attachment=True,
+            download_name=f"transcript.txt", # simplified name
+            mimetype='text/plain'
+        )
+    elif fmt == 'md':
+        # Markdown, replace <br> with \n\n
+        md_content = f"# Transcript\n\n{refined_text.replace('<br>', '\n\n').replace('<br/>', '\n\n')}"
+        bio = io.BytesIO(md_content.encode('utf-8'))
+        return send_file(
+            bio,
+            as_attachment=True,
+            download_name=f"transcript.md",
+            mimetype='text/markdown'
+        )
+    elif fmt == 'docx':
+        try:
+            bio = create_docx(refined_text)
+            return send_file(
+                bio,
+                as_attachment=True,
+                download_name=f"transcript.docx",
+                mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            )
+        except Exception as e:
+            print(f"Error creating DOCX: {e}")
+            return jsonify({"error": str(e)}), 500
+    else:
+        return jsonify({"error": "Invalid format"}), 400
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))

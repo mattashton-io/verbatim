@@ -6,3 +6,4 @@ google-cloud-secret-manager
 python-dotenv
 requests
 google-auth
+python-docx
