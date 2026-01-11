@@ -1,6 +1,9 @@
 import os
 from google.cloud import secretmanager
 
+PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+
 def get_secret():
     """
     Retrieves a secret from Google Secret Manager using a resource ID 
@@ -17,7 +20,7 @@ def get_secret():
         client = secretmanager.SecretManagerServiceClient()
 
         # Build the resource name of the secret version.
-        name = "projects/396631018769/secrets/verbatim-gemini/versions/latest"
+        name = f"projects/{PROJECT_ID}/secrets/{GEMINI_API_KEY}/versions/latest"
 
         # Access the secret version.
         response = client.access_secret_version(request={"name": name})

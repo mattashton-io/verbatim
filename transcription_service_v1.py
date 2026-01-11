@@ -13,8 +13,6 @@ from secret_manager_utils import get_secret
 
 load_dotenv()
 
-PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT")
-
 def convert_to_flac_mono(gcs_uri):
     """
     Downloads audio from GCS, converts to FLAC mono 16kHz using ffmpeg subprocess, 
