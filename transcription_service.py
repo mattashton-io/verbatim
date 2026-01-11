@@ -10,16 +10,19 @@ from secret_manager_utils import get_secret
 load_dotenv()
 
 PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT")
-LOCATION = "global"  # Must be global for Diarization in BatchRecognize
+# MUST be "global" because Batch API Diarization is not supported in regional endpoints yet.
+LOCATION = "global" 
 
 def transcribe_gcs_file(gcs_uri):
     """
     Transcribes a long audio file from GCS using Speech-to-Text V2 Batch API.
-    Enables speaker diarization (2-6 speakers) and uses the 'chirp_3' model.
+    Enables speaker diarization (2-6 speakers) and uses the 'long' model.
     """
-    client = speech_v2.SpeechClient() # Global location doesn't need regional endpoint
+    # Instantiate client without ClientOptions (defaults to global endpoint)
+    client = speech_v2.SpeechClient()
 
     # Recognizer configuration
+    # Use 'long' model which supports Diarization globally for Batch requests.
     config = cloud_speech.RecognitionConfig(
         auto_decoding_config=cloud_speech.AutoDetectDecodingConfig(),
         features=cloud_speech.RecognitionFeatures(
@@ -28,7 +31,7 @@ def transcribe_gcs_file(gcs_uri):
                 max_speaker_count=6,
             ),
         ),
-        model="chirp_3",
+        model="long", 
         language_codes=["en-US"],
     )
 
@@ -36,6 +39,8 @@ def transcribe_gcs_file(gcs_uri):
         inline_response_config=cloud_speech.InlineOutputConfig(),
     )
 
+    # Create the BatchRecognizeRequest
+    # Note: "recognizers/_" means we are providing the config inline rather than referencing a pre-created recognizer resource.
     request = cloud_speech.BatchRecognizeRequest(
         recognizer=f"projects/{PROJECT_ID}/locations/{LOCATION}/recognizers/_",
         config=config,
@@ -43,18 +48,32 @@ def transcribe_gcs_file(gcs_uri):
         recognition_output_config=output_config,
     )
 
+    # Create the batch recognition operation
     operation = client.batch_recognize(request=request)
     print(f"Waiting for transcription operation to complete: {operation.operation.name}")
     
-    response = operation.result(timeout=3600)  # Wait up to 1 hour
+    # Wait for the operation to complete (timeout set to 3600s = 1 hour)
+    response = operation.result(timeout=3600)
     
     # Process results from inline destination
     transcript = ""
-    for result in response.results[gcs_uri].transcript.results:
-        if result.alternatives:
-            # Note: For diarization, we might need to process words or specific fields.
-            # Speech V2 Batch diarization results are usually embedded in the alternatives.
-            transcript += result.alternatives[0].transcript + "\n"
+    
+    # The response results are keyed by the input GCS URI
+    if gcs_uri in response.results:
+        file_result = response.results[gcs_uri]
+        
+        # Check for errors in the specific file result
+        if file_result.error and file_result.error.message:
+            raise Exception(f"Transcription failed: {file_result.error.message}")
+
+        # Concatenate transcript segments
+        if file_result.transcript and file_result.transcript.results:
+            for result in file_result.transcript.results:
+                if result.alternatives:
+                    # Append the transcript from the first alternative
+                    transcript += result.alternatives[0].transcript + "\n"
+    else:
+        raise Exception("Transcription result not found for the provided URI.")
             
     return transcript
 
@@ -80,7 +99,7 @@ def refine_text_with_gemini(raw_text):
     )
 
     response = client.models.generate_content(
-        model="gemini-3-flash-preview", # As requested in the project plan
+        model="gemini-3-flash-preview", 
         contents=[
             types.Content(
                 role="user",
