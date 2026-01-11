@@ -1,0 +1,2 @@
+127.0.0.1 - - [11/Jan/2026 01:05:43] "POST /upload HTTP/1.1" 200 -
+Error in transcription pipeline: 400 Diarization is not currently supported in single-region locations for BatchRecognize. [detail: "[ORIGINAL ERROR] generic::invalid_argument: Diarization is not currently supported in single-region locations for BatchRecognize. [google.rpc.error_details_ext] { message: \"Diarization is not currently supported in single-region locations for BatchRecognize.\" }"

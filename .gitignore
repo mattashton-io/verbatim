@@ -1,0 +1,4 @@
+static
+*.mp3
+env*
+.env

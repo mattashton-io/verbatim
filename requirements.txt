@@ -1,0 +1,9 @@
+flask
+google-cloud-storage
+google-cloud-speech
+google-genai
+google-cloud-secret-manager
+python-dotenv
+pydub
+requests
+google-auth
