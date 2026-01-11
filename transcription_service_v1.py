@@ -2,6 +2,7 @@ import os
 import time
 # We switch to V1 (stable) because it reliably supports Diarization for LongRunningRecognize
 from google.cloud import speech_v1p1beta1 as speech 
+from google.cloud import secretmanager
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
@@ -90,38 +91,48 @@ def transcribe_gcs_file(gcs_uri):
 
     return full_transcript
 
+
 def refine_text_with_gemini(raw_text):
     """
     Refines raw transcript text using Gemini 3 Flash.
     Formats into clean paragraphs with speaker labels and fixed punctuation.
     """
-    secret_id = os.environ.get("GEMINI_API_KEY")
-    api_key = secret_manager_utils.get_secret(secret_id)
+    try:
+        # Create the Secret Manager client.
+        client = secretmanager.SecretManagerServiceClient()
 
-    if not api_key:
-        raise ValueError("GEMINI_API_KEY could not be retrieved")
+        # Build the resource name of the secret version.
+        name = "projects/396631018769/secrets/verbatim-gemini/versions/latest"
 
-    client = genai.Client(api_key=api_key)
-    
-    system_instruction = (
+        # Access the secret version.
+        response = client.access_secret_version(request={"name": name})
+
+        # Extract the payload.
+        secret_string = response.payload.data.decode("UTF-8")
+
+        genai.configure(api_key=secret_string)
+        
+        system_instruction = (
         "You are an expert transcriber. You will receive a raw transcript with speaker labels. "
         "Format it into clean, readable paragraphs. Fix punctuation and capitalization. "
         "Do NOT summarize; keep every word. Differentiate speakers clearly (e.g., **Speaker 1:**). "
         "Use <br> for new lines to ensure proper HTML rendering."
     )
 
-    response = client.models.generate_content(
-        model="gemini-2.5-flash", 
-        contents=[
-            types.Content(
-                role="user",
-                parts=[types.Part.from_text(text=f"Refine this transcript:\n\n{raw_text}")]
-            )
-        ],
-        config=types.GenerateContentConfig(
-            system_instruction=system_instruction,
-            temperature=0.3
-        )
+        response = client.models.generate_content(
+          model="gemini-2.5-flash", 
+          contents=[
+              types.Content(
+                  role="user",
+                  parts=[types.Part.from_text(text=f"Refine this transcript:\n\n{raw_text}")]
+              )
+          ],
+          config=types.GenerateContentConfig(
+              system_instruction=system_instruction,
+              temperature=0.3
+          )
     )
-    
-    return response.text
+        return response.text
+    except Exception as e:
+        print(f"Error refining text with Gemini: {e}")
+        return raw_text # Return original text if Gemini fails

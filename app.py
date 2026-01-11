@@ -4,6 +4,7 @@ import threading
 import time
 from flask import Flask, request, render_template, jsonify, send_from_directory
 from google.cloud import storage
+from google.cloud import secretmanager
 from transcription_service_v1 import transcribe_gcs_file, refine_text_with_gemini
 from dotenv import load_dotenv
 
@@ -15,6 +16,7 @@ app = Flask(__name__)
 # Configuration
 GCS_BUCKET_NAME = os.environ.get('GCS_BUCKET_NAME')
 PROJECT_ID = os.environ.get('GOOGLE_CLOUD_PROJECT')
+
 
 # Simple in-memory job store (for demo purposes)
 jobs = {}
