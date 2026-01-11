@@ -48,18 +48,23 @@ def transcribe_gcs_file(gcs_uri):
     response = operation.result(timeout=10800)
 
     # --- Transcript Reconstruction ---
-    # V1 Diarization returns a list of words with speaker tags in the LAST result
+    # In V1 Async with diarization, the words with speaker tags are often 
+    # aggregated in the final result, but we'll check all results for robustness.
     transcript_builder = []
     current_speaker = None
     current_sentence = []
 
-    # In V1p1beta1 diarization, the words with tags are in the final result's alternative
     if response.results:
-        # Get words from the last result which contains the full diarized word list
-        result = response.results[-1]
-        words_info = result.alternatives[0].words
+        print(f"[DEBUG] Processing {len(response.results)} results for diarization...")
+        
+        # Most reliable way to get diarized words in V1 Async is the final result's alternative
+        # However, for 'latest_long', we sometimes need to iterate all segments.
+        # We will try to find the full word list first.
+        final_result = response.results[-1]
+        words_info = final_result.alternatives[0].words
         
         if words_info:
+            print(f"[DEBUG] Found {len(words_info)} diarized words in final result.")
             for word_info in words_info:
                 speaker = word_info.speaker_tag
                 word = word_info.word
@@ -75,14 +80,18 @@ def transcribe_gcs_file(gcs_uri):
             if current_sentence:
                 transcript_builder.append(f"**Speaker {current_speaker}:** {' '.join(current_sentence)}")
         else:
-            # Fallback if words_info is missing
+            # Fallback: If no aggregated word list, join the transcripts of each result
+            print("[DEBUG] No aggregated word list found. Falling back to segment transcripts.")
             for res in response.results:
                 transcript_builder.append(res.alternatives[0].transcript)
 
     full_transcript = "\n\n".join(transcript_builder)
     
     if not full_transcript.strip():
+        print("[DEBUG] Warning: full_transcript is empty.")
         full_transcript = "No transcript generated."
+    else:
+        print(f"[DEBUG] Reconstructed transcript length: {len(full_transcript)} chars")
 
     return full_transcript
 
@@ -105,15 +114,10 @@ def refine_text_with_gemini(raw_text):
         print(f"[DEBUG] Sending transcript (length: {len(raw_text)}) to Gemini 3 Flash...")
         response = client.models.generate_content(
             model="gemini-3-flash-preview", 
-            contents=[
-                types.Content(
-                    role="user",
-                    parts=[types.Part.from_text(text=f"Refine this transcript:\n\n{raw_text}")]
-                )
-            ],
+            contents=f"Refine this transcript:\n\n{raw_text}",
             config=types.GenerateContentConfig(
                 system_instruction=system_instruction,
-                temperature=0.3
+                temperature=0.1
             )
         )
         return response.text
